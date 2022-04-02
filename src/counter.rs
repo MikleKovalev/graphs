@@ -1,16 +1,19 @@
 use crate::graph::Graph;
 
+struct VertexSet {
+    set: Vec<usize>,
+    other: Vec<usize>,
+}
+
 pub struct Counter {
-    in_set: Vec<Vec<usize>>,
-    not_in_set: Vec<Vec<usize>>,
+    sets: Vec<VertexSet>,
 }
 
 impl Counter {
     pub fn new(size: usize) -> Counter {
         let mut permutation = vec![0; size];
-        let mut in_set = Vec::<Vec<usize>>::with_capacity(1 << size);
-        let mut not_in_set = Vec::<Vec<usize>>::with_capacity(1 << size);
-        for _ in 0..1 << size {
+        let mut sets = Vec::<VertexSet>::with_capacity(1 << size);
+        for _ in 0..((1 << size) - 1) {
             let mut set = Vec::<usize>::with_capacity(size);
             let mut other = Vec::<usize>::with_capacity(size);
             let mut carry = 1;
@@ -24,24 +27,40 @@ impl Counter {
                     set.push(i);
                 }
             }
-            in_set.push(set);
-            not_in_set.push(other);
+            let vertex_set = VertexSet {
+                set,
+                other,
+            };
+            sets.push(vertex_set);
         }
+        let sort_rule = |first: &VertexSet, second: &VertexSet| {
+            first.set.len().partial_cmp(&second.set.len()).unwrap()
+        };
+        sets.sort_by(sort_rule);
         Counter {
-            in_set,
-            not_in_set,
+            sets,
         }
     }
 
     pub fn count(&self, graph: &Graph) -> (usize, usize) {
         let mut domination = 100;
         let mut independence = 0;
-        for (set, other) in self.in_set.iter().zip(self.not_in_set.iter()) {
-            if let Some(d) = Counter::domination(&graph, &set, &other) {
-                domination = domination.min(d);
+        for set in self.sets.iter() {
+            match Counter::domination(&graph, &set.set, &set.other) {
+                Some(value) => {
+                    domination = value;
+                    break;
+                }
+                _ => continue,
             }
-            if let Some(i) = Counter::independence(&graph, &set) {
-                independence = independence.max(i);
+        }
+        for set in self.sets.iter().rev() {
+            match Counter::independence(&graph, &set.set) {
+                Some(value) => {
+                    independence = value;
+                    break;
+                }
+                _ => continue,
             }
         }
         (domination, independence)
